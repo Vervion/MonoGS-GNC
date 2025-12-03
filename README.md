@@ -38,7 +38,9 @@ This software implements dense SLAM system presented in our paper <a href="https
 The method demonstrates the first monocular SLAM solely based on 3D Gaussian Splatting (left), which also supports Stereo/RGB-D inputs (middle/right).
 </p>
 <br>
-
+#NEXT STEPS
+- Decide on optimization wrapping code and start development/integration
+- Add manual ATE/RPE calculations 
 # Note
 - In an academic paper, please refer to our work as **Gaussian Splatting SLAM** or **MonoGS** for short (this repo's name) to avoid confusion with other works.
 - Differential Gaussian Rasteriser with camera pose gradient computation is available [here](https://github.com/rmurai0610/diff-gaussian-rasterization-w-pose.git).
