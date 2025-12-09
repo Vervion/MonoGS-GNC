@@ -1,5 +1,49 @@
 import torch
 
+##########################    GNC LOSS UTILITIES    ####################################
+
+def gnc_is_enabled(config):
+    gnc_cfg = config.get("GNC", None)
+    return gnc_cfg is not None and gnc_cfg.get("enabled", False)
+
+
+def gnc_current_scale(config):
+    """
+    Read current Cauchy scale s from config["GNC"]["current_s"].
+    Returns None if GNC is disabled.
+    """
+    if not gnc_is_enabled(config):
+        return None
+    return float(config["GNC"].get("current_s", 0.0)) or None
+
+
+def cauchy_weight(residuals, s):
+    """
+    Cauchy IRLS weight:
+        rho(r; s) = s^2 * log(1 + (r/s)^2)
+        w(r; s)   = 1 / (1 + (r/s)^2)
+    """
+    if s is None or s <= 0.0:
+        # no robustification, all weights 1
+        return torch.ones_like(residuals)
+
+    r = residuals.detach()
+    return 1.0 / (1.0 + (r / s) ** 2)
+
+
+def gnc_loss_from_residuals(residuals, config):
+    """
+    If GNC disabled  -> standard L1 loss on residuals.
+    If GNC enabled   -> Cauchy-IRLS weighted L2 loss.
+    """
+    s = gnc_current_scale(config)
+    if s is None:
+        return torch.abs(residuals).mean()
+
+    w = cauchy_weight(residuals, s)
+    return (w * (residuals ** 2)).mean()
+
+###########################    SLAM LOSS UTILITIES    ####################################
 
 def image_gradient(image):
     # Compute image gradient using Scharr Filter
@@ -67,8 +111,12 @@ def get_loss_tracking_rgb(config, image, depth, opacity, viewpoint):
     rgb_boundary_threshold = config["Training"]["rgb_boundary_threshold"]
     rgb_pixel_mask = (gt_image.sum(dim=0) > rgb_boundary_threshold).view(*mask_shape)
     rgb_pixel_mask = rgb_pixel_mask * viewpoint.grad_mask
-    l1 = opacity * torch.abs(image * rgb_pixel_mask - gt_image * rgb_pixel_mask)
-    return l1.mean()
+    
+    # residual = predicted - ground truth
+    residual_rgb = image * rgb_pixel_mask - gt_image * rgb_pixel_mask
+
+    # this will be L1 if GNC is off, Cauchy-IRLS if GNC is on
+    return gnc_loss_from_residuals(residual_rgb, config)
 
 
 def get_loss_tracking_rgbd(
@@ -84,8 +132,11 @@ def get_loss_tracking_rgbd(
 
     l1_rgb = get_loss_tracking_rgb(config, image, depth, opacity, viewpoint)
     depth_mask = depth_pixel_mask * opacity_mask
-    l1_depth = torch.abs(depth * depth_mask - gt_depth * depth_mask)
-    return alpha * l1_rgb + (1 - alpha) * l1_depth.mean()
+
+    residual_depth = depth * depth_mask - gt_depth * depth_mask
+    loss_depth = gnc_loss_from_residuals(residual_depth, config)
+
+    return alpha * l1_rgb + (1 - alpha) * loss_depth
 
 
 def get_loss_mapping(config, image, depth, viewpoint, opacity, initialization=False):
@@ -105,9 +156,8 @@ def get_loss_mapping_rgb(config, image, depth, viewpoint):
     rgb_boundary_threshold = config["Training"]["rgb_boundary_threshold"]
 
     rgb_pixel_mask = (gt_image.sum(dim=0) > rgb_boundary_threshold).view(*mask_shape)
-    l1_rgb = torch.abs(image * rgb_pixel_mask - gt_image * rgb_pixel_mask)
-
-    return l1_rgb.mean()
+    residual_rgb = image * rgb_pixel_mask - gt_image * rgb_pixel_mask
+    return gnc_loss_from_residuals(residual_rgb, config)
 
 
 def get_loss_mapping_rgbd(config, image, depth, viewpoint, initialization=False):
@@ -122,10 +172,13 @@ def get_loss_mapping_rgbd(config, image, depth, viewpoint, initialization=False)
     rgb_pixel_mask = (gt_image.sum(dim=0) > rgb_boundary_threshold).view(*depth.shape)
     depth_pixel_mask = (gt_depth > 0.01).view(*depth.shape)
 
-    l1_rgb = torch.abs(image * rgb_pixel_mask - gt_image * rgb_pixel_mask)
-    l1_depth = torch.abs(depth * depth_pixel_mask - gt_depth * depth_pixel_mask)
+    residual_rgb = image * rgb_pixel_mask - gt_image * rgb_pixel_mask
+    residual_depth = depth * depth_pixel_mask - gt_depth * depth_pixel_mask
 
-    return alpha * l1_rgb.mean() + (1 - alpha) * l1_depth.mean()
+    loss_rgb = gnc_loss_from_residuals(residual_rgb, config)
+    loss_depth = gnc_loss_from_residuals(residual_depth, config)
+
+    return alpha * loss_rgb + (1 - alpha) * loss_depth
 
 
 def get_median_depth(depth, opacity=None, mask=None, return_std=False):

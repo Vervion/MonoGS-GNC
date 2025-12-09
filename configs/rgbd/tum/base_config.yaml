@@ -50,6 +50,17 @@ Training:
     cam_trans_delta: 0.001
 
 
+################## GNC parameters ####################
+
+GNC:
+  enabled: true
+  s0: 0.3
+  s_star: 0.03
+  gamma: 0.5
+  stages: 5
+  iters_per_stage: 10
+
+################ End GNC parameters ####################
 
 ## 3DGS default parameters
 opt_params:

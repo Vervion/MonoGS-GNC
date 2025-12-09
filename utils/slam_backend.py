@@ -63,6 +63,15 @@ class BackEnd(mp.Process):
             if "single_thread" in self.config["Dataset"]
             else False
         )
+        gnc_cfg = self.config.get("GNC", {})
+        self.use_gnc = gnc_cfg.get("enabled", False)
+        self.gnc_s0 = float(gnc_cfg.get("s0", 0.0))
+        self.gnc_s_star = float(gnc_cfg.get("s_star", 0.0))
+        self.gnc_gamma = float(gnc_cfg.get("gamma", 0.5))
+        self.gnc_stages = int(gnc_cfg.get("stages", 0))
+        self.gnc_iters_per_stage = int(
+            gnc_cfg.get("iters_per_stage", self.mapping_itr_num)
+        )
 
     def add_next_kf(self, frame_idx, viewpoint, init=False, scale=2.0, depth_map=None):
         self.gaussians.extend_from_pcd_seq(
@@ -316,6 +325,49 @@ class BackEnd(mp.Process):
                         continue
                     update_pose(viewpoint)
         return gaussian_split
+    
+
+################################## GNC Extension ##################################
+
+    def map_with_gnc(self, current_window, prune=False, base_iters=1):
+        # Fall back to standard map() when disabled
+        if (not self.use_gnc) or self.gnc_stages <= 0:
+            return self.map(current_window, prune=prune, iters=base_iters)
+
+        # Ensure config["GNC"] exists
+        if "GNC" not in self.config:
+            self.config["GNC"] = {}
+
+        s = self.gnc_s0
+        s_star = self.gnc_s_star
+        gamma = self.gnc_gamma
+
+        any_split = False
+
+        for stage in range(self.gnc_stages):
+
+            # expose current scale to slam_utils.get_loss_mapping
+            self.config["GNC"]["current_s"] = float(s)
+
+            split = self.map(
+                current_window,
+                prune=(prune and (stage == self.gnc_stages - 1)),
+                iters=base_iters,
+            )
+            any_split = any_split or split
+
+            # geometric schedule
+            if s_star > 0:
+                if s <= s_star:
+                    break
+                s = max(gamma * s, s_star)
+            else:
+                s = gamma * s
+
+        self.config["GNC"]["current_s"] = float(s)  # final nonconvex stage
+        return any_split
+
+################################## GNC Extension End ##################################
 
     def color_refinement(self):
         Log("Starting color refinement")
@@ -377,9 +429,9 @@ class BackEnd(mp.Process):
                 if self.single_thread:
                     time.sleep(0.01)
                     continue
-                self.map(self.current_window)
+                self.map_with_gnc(self.current_window, prune=False, base_iters=1)
                 if self.last_sent >= 10:
-                    self.map(self.current_window, prune=True, iters=10)
+                    self.map_with_gnc(self.current_window, prune=True, base_iters=10)
                     self.push_to_frontend()
             else:
                 data = self.backend_queue.get()
@@ -470,8 +522,13 @@ class BackEnd(mp.Process):
                         )
                     self.keyframe_optimizers = torch.optim.Adam(opt_params)
 
-                    self.map(self.current_window, iters=iter_per_kf)
-                    self.map(self.current_window, prune=True)
+                    if self.use_gnc:
+                        self.map_with_gnc(self.current_window, prune=False, base_iters=iter_per_kf)
+                        self.map_with_gnc(self.current_window, prune=True, base_iters=1)
+                    else:
+                        self.map(self.current_window, iters=iter_per_kf)
+                        self.map(self.current_window, prune=True)
+
                     self.push_to_frontend("keyframe")
                 else:
                     raise Exception("Unprocessed data", data)
