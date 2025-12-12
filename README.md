@@ -15,26 +15,7 @@
   <h3 align="center"><a href="https://arxiv.org/abs/2312.06741">Paper</a> | <a href="https://youtu.be/x604ghp9R_Q?si=nYoWr8h2Xh-6L_KN">Video</a> | <a href="https://rmurai.co.uk/projects/GaussianSplattingSLAM/">Project Page</a></h3>
   <div align="center"></div>
 
-<p align="center">
-  <a href="">
-    <img src="./media/teaser.gif" alt="teaser" width="100%">
-  </a>
-  <a href="">
-    <img src="./media/gui.jpg" alt="gui" width="100%">
-  </a>
-</p>
-<p align="center">
-This software implements dense SLAM system presented in our paper <a href="https://arxiv.org/abs/2312.06741">Gaussian Splatting SLAM</a> in CVPR'24.
-The method demonstrates the first monocular SLAM solely based on 3D Gaussian Splatting (left), which also supports Stereo/RGB-D inputs (middle/right).
-</p>
-<br>
-#NEXT STEPS
-- Decide on optimization wrapping code and start development/integration
-- Add manual ATE/RPE calculations 
-# Note
-- In an academic paper, please refer to our work as **Gaussian Splatting SLAM** or **MonoGS** for short (this repo's name) to avoid confusion with other works.
-- Differential Gaussian Rasteriser with camera pose gradient computation is available [here](https://github.com/rmurai0610/diff-gaussian-rasterization-w-pose.git).
-- **[New]** Speed-up version of our code is available in `dev.speedup` branch, It achieves up to 10fps on monocular fr3/office sequence while keeping consistent performance (tested on RTX4090/i9-12900K). The code will be merged into the main branch after further refactoring and testing.
+
 
 # Getting Started
 ## Installation
