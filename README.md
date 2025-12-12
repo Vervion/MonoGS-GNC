@@ -4,7 +4,7 @@
 
 <p align="center">
 
-  <h1 align="center"> Gaussian Splatting SLAM
+  <h1 align="center"> Gaussian Splatting SLAM with Graduated-Non-Convexity
   </h1>
   <p align="center">
     <a href="https://muskie82.github.io/"><strong>*Hidenobu Matsuki</strong></a>
@@ -16,8 +16,6 @@
     <a href="https://www.doc.ic.ac.uk/~ajd/"><strong>Andrew J. Davison</strong></a>
   </p>
   <p align="center">(* Equal Contribution)</p>
-
-  <h3 align="center"> CVPR 2024 (Highlight)</h3>
 
 
 
